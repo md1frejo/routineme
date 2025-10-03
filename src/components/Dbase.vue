@@ -1,7 +1,7 @@
 <script setup>
  import { ref, onMounted } from "vue";
  import initSqlJs from "sql.js";
- 
+
  const db = ref(null);
  const items = ref([]);
 
@@ -15,15 +15,17 @@
      locateFile: file => `/${file}` // will load /sql-wasm.wasm
    });
 
+   // load from file (optional: you can also start empty if no today.sqlite exists)
    const response = await fetch("/today.sqlite");
    const buffer = await response.arrayBuffer();
 
    db.value = new SQL.Database(new Uint8Array(buffer));
 
-   // Ensure table exists
+   // Ensure table exists with an auto-incrementing id
    db.value.run(`
     CREATE TABLE IF NOT EXISTS today (
-      tasks TEXT PRIMARY KEY,
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tasks TEXT,
       time TEXT,
       completed TEXT
     )
@@ -34,10 +36,11 @@
 
  function refreshItems() {
    if (!db.value) return;
-   const res = db.value.exec("SELECT tasks, time, completed FROM today");
+   const res = db.value.exec("SELECT id, tasks, time, completed FROM today");
    if (res.length > 0) {
      const values = res[0].values;
-     items.value = values.map(([tasks, time, completed]) => ({
+     items.value = values.map(([id, tasks, time, completed]) => ({
+       id,
        tasks,
        time,
        completed
@@ -50,11 +53,10 @@
  function addItem() {
    if (!db.value) return;
    try {
-     db.value.run("INSERT INTO today (tasks, time, completed) VALUES (?, ?, ?)", [
-       newTask.value,
-       newTime.value,
-       newCompleted.value
-     ]);
+     db.value.run(
+       "INSERT INTO today (tasks, time, completed) VALUES (?, ?, ?)",
+       [newTask.value, newTime.value, newCompleted.value]
+     );
      console.log("Inserted:", newTask.value, newTime.value, newCompleted.value);
 
      // reset form
@@ -71,15 +73,15 @@
  function updateItem(item) {
    if (!db.value) return;
    db.value.run(
-     "UPDATE today SET time = ?, completed = ? WHERE tasks = ?",
-     [item.time, item.completed, item.tasks]
+     "UPDATE today SET tasks = ?, time = ?, completed = ? WHERE id = ?",
+     [item.tasks, item.time, item.completed, item.id]
    );
    refreshItems();
  }
 
- function deleteItem(task) {
+ function deleteItem(id) {
    if (!db.value) return;
-   db.value.run("DELETE FROM today WHERE tasks = ?", [task]);
+   db.value.run("DELETE FROM today WHERE id = ?", [id]);
    refreshItems();
  }
 
@@ -87,13 +89,10 @@
 </script>
 
 <template>
-  
   <div>
-    <h1>SQLite in Vue + WebAssembly</h1>
-
     <!-- Add new task -->
-    <div class="add-task">
-      <input v-model="newTask" placeholder="Task (unique)" />
+    <div class="add-task text-4xl">
+      <input v-model="newTask" placeholder="Task name" />
       <input v-model="newTime" type="time" />
       <select v-model="newCompleted">
         <option value="no">Not Completed</option>
@@ -104,60 +103,16 @@
 
     <!-- Task list -->
     <ul>
-      <li v-for="item in items" :key="item.tasks">
-        <strong>{{ item.tasks }}</strong>
+      <li v-for="item in items" :key="item.id">
+        <p class="text-db1 text-blue-500">{{ item.tasks }}</p>
         <input v-model="item.time" type="time" />
         <select v-model="item.completed">
           <option value="no">Not Completed</option>
           <option value="yes">Completed</option>
         </select>
-
-        <button @click="updateItem(item)">Update</button>
-        <button @click="deleteItem(item.tasks)">Delete</button>
+        <button @click="updateItem(item)" class="bg-blue-500 btn">Update</button>
+        <button @click="deleteItem(item.id)" class="bg-red-500 btn">Delete</button>
       </li>
     </ul>
-    <button class="bg-green4g-300 btn btn-primary">daisy? Click me</button>
-    <details class="dropdown">
-      <summary class="btn m-1">daisy dropdown</summary>
-      <ul class="menu dropdown-content bg-base-100 rounded-box z-1 w-52 p-2 shadow-sm">
-	<li><a>Item 1</a></li>
-	<li><a>Item 2</a></li>
-      </ul>
-    </details>
-    <ul class="menu menu-vertical lg:menu-horizontal bg-base-200 rounded-box">
-      <li><a>Item 1</a></li>
-      <li><a>Item 2</a></li>
-      <li><a>Item 3</a></li>
-    </ul>
-    <p class="text-db1">tabs</p>
-    <div role="tablist" class="tabs tabs-lift tabs-xs">
-      <a role="tab" class="tab">Xsmall</a>
-      <a role="tab" class="tab tab-active">Xsmall</a>
-      <a role="tab" class="tab">Xsmall</a>
-    </div>
-    
-    <div role="tablist" class="tabs tabs-lift tabs-sm">
-      <a role="tab" class="tab">Small</a>
-      <a role="tab" class="tab tab-active">Small</a>
-      <a role="tab" class="tab">Small</a>
-    </div>
-    
-    <div role="tablist" class="tabs tabs-lift">
-      <a role="tab" class="tab">Medium</a>
-      <a role="tab" class="tab tab-active">Medium</a>
-      <a role="tab" class="tab">Medium</a>
-    </div>
-    
-    <div role="tablist" class="tabs tabs-lift tabs-lg">
-      <a role="tab" class="tab">Large</a>
-      <a role="tab" class="tab tab-active">Large</a>
-      <a role="tab" class="tab">Large</a>
-    </div>
-    
-    <div role="tablist" class="tabs tabs-lift tabs-xl">
-      <a role="tab" class="tab">Xlarge</a>
-      <a role="tab" class="tab tab-active">Xlarge</a>
-      <a role="tab" class="tab">Xlarge</a>
-    </div>
   </div>
 </template>
